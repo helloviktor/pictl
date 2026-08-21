@@ -1,0 +1,139 @@
+package handlers
+
+import (
+	"embed"
+	"encoding/json"
+	"io/fs"
+	"net/http"
+
+	"github.com/pictl/pictl/internal/models"
+	"github.com/pictl/pictl/internal/services"
+)
+
+// Handlers handles HTTP requests
+type Handlers struct {
+	sysService *services.SystemService
+	staticFS   embed.FS
+}
+
+// NewHandlers creates a new Handlers instance
+func NewHandlers(sysService *services.SystemService, staticFS embed.FS) *Handlers {
+	return &Handlers{
+		sysService: sysService,
+		staticFS:   staticFS,
+	}
+}
+
+// ServeHTML serves the main HTML file
+func (h *Handlers) ServeHTML() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+
+		data, err := h.staticFS.ReadFile("web/static/index.html")
+		if err != nil {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(data)
+	}
+}
+
+// ServeStatic serves static files (CSS, JS, etc.)
+func (h *Handlers) ServeStatic() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Create a sub-filesystem for static files
+		fsys, err := fs.Sub(h.staticFS, "web/static")
+		if err != nil {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		handler := http.FileServer(http.FS(fsys))
+		handler.ServeHTTP(w, r)
+	}
+}
+
+// GetSystemInfo returns current system information
+func (h *Handlers) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	info, err := h.sysService.GetSystemInfo()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(info)
+}
+
+// UpdateSystem handles system update request
+func (h *Handlers) UpdateSystem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	err := h.sysService.UpdateSystem()
+	resp := models.UpdateResponse{
+		Success: err == nil,
+	}
+	if err != nil {
+		resp.Message = err.Error()
+	} else {
+		resp.Message = "System update started"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// RestartSystem handles system restart request
+func (h *Handlers) RestartSystem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	err := h.sysService.RestartSystem()
+	resp := models.UpdateResponse{
+		Success: err == nil,
+	}
+	if err != nil {
+		resp.Message = err.Error()
+	} else {
+		resp.Message = "System restart initiated"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// ShutdownSystem handles system shutdown request
+func (h *Handlers) ShutdownSystem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	err := h.sysService.ShutdownSystem()
+	resp := models.UpdateResponse{
+		Success: err == nil,
+	}
+	if err != nil {
+		resp.Message = err.Error()
+	} else {
+		resp.Message = "System shutdown initiated"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
