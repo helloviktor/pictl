@@ -1,68 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Raspberry Pi Controller</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
+
+    <!-- Animated background lights -->
+    <div class="background">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
     <div class="container">
+
         <header>
-            <h1>Raspberry Pi System Monitor</h1>
+            <div class="status-dot"></div>
+            <p class="eyebrow">SYSTEM CONTROL</p>
+            <h1>Raspberry Pi</h1>
+            <p class="subtitle">System Monitor & Device Control</p>
         </header>
 
         <main>
+
             <section class="system-info">
+
+                <div class="section-title">
+                    <span>System Status</span>
+                    <span class="live-indicator">
+                        <span></span> LIVE
+                    </span>
+                </div>
+
                 <div class="info-grid">
+
                     <div class="info-card">
-                        <h3>CPU Usage</h3>
+                        <div class="card-header">
+                            <h3>CPU Usage</h3>
+                            <span class="icon">CPU</span>
+                        </div>
+
                         <div class="info-value" id="cpu-usage">--</div>
+
                         <div class="progress-bar">
                             <div class="progress-fill" id="cpu-progress"></div>
                         </div>
                     </div>
 
                     <div class="info-card">
-                        <h3>Memory Usage</h3>
+                        <div class="card-header">
+                            <h3>Memory Usage</h3>
+                            <span class="icon">RAM</span>
+                        </div>
+
                         <div class="info-value" id="memory-usage">--</div>
+
                         <div class="progress-bar">
                             <div class="progress-fill" id="memory-progress"></div>
                         </div>
                     </div>
 
                     <div class="info-card">
-                        <h3>Disk Usage</h3>
+                        <div class="card-header">
+                            <h3>Disk Usage</h3>
+                            <span class="icon">DISK</span>
+                        </div>
+
                         <div class="info-value" id="disk-usage">--</div>
+
                         <div class="progress-bar">
                             <div class="progress-fill" id="disk-progress"></div>
                         </div>
                     </div>
 
-                    <div class="info-card">
-                        <h3>CPU Temperature</h3>
+                    <div class="info-card temperature-card">
+                        <div class="card-header">
+                            <h3>CPU Temperature</h3>
+                            <span class="icon">TEMP</span>
+                        </div>
+
                         <div class="info-value" id="cpu-temp">--</div>
+
+                        <div class="temperature-line">
+                            <div></div>
+                        </div>
                     </div>
+
                 </div>
 
                 <div class="info-footer">
-                    <p>Last Update: <span id="last-update">--</span></p>
-                    <p>Updates Available: <span id="updates-available">--</span></p>
+                    <div>
+                        <span class="footer-label">LAST UPDATE</span>
+                        <strong id="last-update">--</strong>
+                    </div>
+
+                    <div>
+                        <span class="footer-label">UPDATES AVAILABLE</span>
+                        <strong id="updates-available">--</strong>
+                    </div>
                 </div>
+
             </section>
 
             <section class="actions">
-                <button id="btn-update" class="btn btn-primary">Update System</button>
-                <button id="btn-restart" class="btn btn-warning">Restart Device</button>
-                <button id="btn-shutdown" class="btn btn-danger">Shutdown Device</button>
+
+                <div class="section-title">
+                    <span>Device Controls</span>
+                </div>
+
+                <button id="btn-update" class="btn btn-primary">
+                    <span class="btn-icon">↻</span>
+                    <span>
+                        <strong>Update System</strong>
+                        <small>Install available updates</small>
+                    </span>
+                    <span class="arrow">→</span>
+                </button>
+
+                <button id="btn-restart" class="btn btn-warning">
+                    <span class="btn-icon">↻</span>
+                    <span>
+                        <strong>Restart Device</strong>
+                        <small>Reboot the Raspberry Pi</small>
+                    </span>
+                    <span class="arrow">→</span>
+                </button>
+
+                <button id="btn-shutdown" class="btn btn-danger">
+                    <span class="btn-icon">⏻</span>
+                    <span>
+                        <strong>Shutdown Device</strong>
+                        <small>Power off the Raspberry Pi</small>
+                    </span>
+                    <span class="arrow">→</span>
+                </button>
+
             </section>
+
         </main>
 
         <footer>
-            <p>&copy; 2024 Pi Control System</p>
+            <span class="footer-dot"></span>
+            Raspberry Pi Control System
+            <span>•</span>
+            v1.0
         </footer>
+
     </div>
 
     <script src="/static/script.js"></script>
 </body>
+
 </html>

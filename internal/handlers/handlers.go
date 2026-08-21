@@ -53,7 +53,8 @@ func (h *Handlers) ServeStatic() http.HandlerFunc {
 			return
 		}
 
-		handler := http.FileServer(http.FS(fsys))
+		// Strip the /static/ prefix and serve files
+		handler := http.StripPrefix("/static/", http.FileServer(http.FS(fsys)))
 		handler.ServeHTTP(w, r)
 	}
 }
