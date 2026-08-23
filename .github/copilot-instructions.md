@@ -12,10 +12,22 @@ The application is designed to manage a Raspberry Pi device, allowing users to m
 
 # Architecture and constraints
 
-The application consists of two Go binaries:
+The application must consist of two Go binaries:
 
 - Web application: provides the web interface, RESTful API, and application logic.
 - Helper application: performs operations that require elevated privileges, such as restarting or shutting down the Raspberry Pi, and updating installed packages.
+
+## Directory structure
+
+```
+project-root/
+├── cmd/
+│   ├── helper/
+│   ├── webapp/
+├── internal/
+├── web/
+│   ├── static/
+```
 
 # Security constraints
 
