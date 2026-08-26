@@ -15,7 +15,9 @@ A lightweight MVC application with a Go backend and minimalistic web interface f
 ```
 pictl/
 ├── cmd/
-│   └── webapp/                # Web application entry point
+│   ├── dashboard/             # Web application entry point
+│   │   └── main.go
+│   └── pictl/                 # System control binary entry point
 │       └── main.go
 ├── internal/
 │   ├── handlers/             # HTTP request handlers
@@ -60,7 +62,8 @@ make build
 ### Using Go directly
 
 ```bash
-go build -o pictl ./cmd/webapp
+go build -o dashboard ./cmd/dashboard
+go build -o pictl ./cmd/pictl
 ```
 
 ## Running
@@ -74,7 +77,7 @@ make run
 ### Using the binary directly
 
 ```bash
-./pictl --addr :8080
+./dashboard --addr :8080
 ```
 
 The application will start on `http://localhost:8080`

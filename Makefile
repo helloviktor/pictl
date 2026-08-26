@@ -1,7 +1,8 @@
 .PHONY: build run clean test help
 
 # Variables
-BINARY_NAME=pictl
+DASHBOARD_BINARY=dashboard
+PICTL_BINARY=pictl
 GO=go
 GOFLAGS=-v
 
@@ -15,14 +16,15 @@ help:
 	@echo "  make lint        - Lint code"
 
 build:
-	$(GO) build $(GOFLAGS) -o $(BINARY_NAME) ./cmd/webapp
+	$(GO) build $(GOFLAGS) -o $(DASHBOARD_BINARY) ./cmd/dashboard
+	$(GO) build $(GOFLAGS) -o $(PICTL_BINARY) ./cmd/pictl
 
 run: build
-	./$(BINARY_NAME)
+	./$(DASHBOARD_BINARY)
 
 clean:
 	$(GO) clean
-	rm -f $(BINARY_NAME)
+	rm -f $(DASHBOARD_BINARY) $(PICTL_BINARY)
 
 test:
 	$(GO) test -v ./...
