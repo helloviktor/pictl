@@ -30,8 +30,7 @@ func main() {
 
 	switch flag.Arg(0) {
 	case "info":
-		var info interface{}
-		info, err = service.GetSystemInfo()
+		info, err := service.GetSystemInfo()
 		if err == nil {
 			err = json.NewEncoder(log.Writer()).Encode(info)
 		}
