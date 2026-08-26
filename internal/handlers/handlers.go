@@ -32,7 +32,7 @@ func (h *Handlers) ServeHTML() http.HandlerFunc {
 			return
 		}
 
-		data, err := h.staticFS.ReadFile("web/static/index.html")
+		data, err := h.staticFS.ReadFile("static/index.html")
 		if err != nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -47,7 +47,7 @@ func (h *Handlers) ServeHTML() http.HandlerFunc {
 func (h *Handlers) ServeStatic() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Create a sub-filesystem for static files
-		fsys, err := fs.Sub(h.staticFS, "web/static")
+		fsys, err := fs.Sub(h.staticFS, "static")
 		if err != nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return

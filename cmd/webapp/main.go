@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"flag"
 	"fmt"
 	"log"
@@ -12,10 +11,8 @@ import (
 
 	"github.com/pictl/pictl/internal/handlers"
 	"github.com/pictl/pictl/internal/services"
+	"github.com/pictl/pictl/web"
 )
-
-//go:embed web/static/*
-var staticFS embed.FS
 
 func main() {
 	addr := flag.String("addr", ":8080", "HTTP server address")
@@ -25,7 +22,7 @@ func main() {
 	sysService := services.NewSystemService()
 
 	// Initialize handlers
-	h := handlers.NewHandlers(sysService, staticFS)
+	h := handlers.NewHandlers(sysService, web.StaticFS)
 
 	// Setup routes
 	mux := http.NewServeMux()

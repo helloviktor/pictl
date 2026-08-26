@@ -14,14 +14,16 @@ A lightweight MVC application with a Go backend and minimalistic web interface f
 
 ```
 pictl/
-├── cmd/                       # Command-line tools
+├── cmd/
+│   └── webapp/                # Web application entry point
+│       └── main.go
 ├── internal/
 │   ├── handlers/             # HTTP request handlers
 │   ├── models/               # Data structures
 │   └── services/             # Business logic
 ├── web/
-│   └── static/               # Static assets (HTML, CSS, JS)
-├── main.go                   # Application entry point
+│   ├── embed.go               # Embeds static assets
+│   └── static/                # Static assets (HTML, CSS, JS)
 ├── go.mod                    # Go module definition
 ├── Makefile                  # Build and run targets
 └── README.md                 # This file
@@ -58,7 +60,7 @@ make build
 ### Using Go directly
 
 ```bash
-go build -o pictl .
+go build -o pictl ./cmd/webapp
 ```
 
 ## Running

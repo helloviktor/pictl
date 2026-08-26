@@ -15,7 +15,7 @@ help:
 	@echo "  make lint        - Lint code"
 
 build:
-	$(GO) build $(GOFLAGS) -o $(BINARY_NAME) .
+	$(GO) build $(GOFLAGS) -o $(BINARY_NAME) ./cmd/webapp
 
 run: build
 	./$(BINARY_NAME)
