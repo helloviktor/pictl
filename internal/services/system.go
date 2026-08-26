@@ -29,33 +29,38 @@ func (s *SystemService) GetSystemInfo() (*models.SystemInfo, error) {
 
 	// Get CPU usage
 	cpuUsage, err := s.getCPUUsage()
-	if err == nil {
-		info.CPUUsage = cpuUsage
+	if err != nil {
+		return nil, fmt.Errorf("get CPU usage: %w", err)
 	}
+	info.CPUUsage = cpuUsage
 
 	// Get memory usage
 	memUsage, err := s.getMemoryUsage()
-	if err == nil {
-		info.MemoryUsage = memUsage
+	if err != nil {
+		return nil, fmt.Errorf("get memory usage: %w", err)
 	}
+	info.MemoryUsage = memUsage
 
 	// Get disk usage
 	diskUsage, err := s.getDiskUsage()
-	if err == nil {
-		info.DiskUsage = diskUsage
+	if err != nil {
+		return nil, fmt.Errorf("get disk usage: %w", err)
 	}
+	info.DiskUsage = diskUsage
 
 	// Get CPU temperature
 	cpuTemp, err := s.getCPUTemperature()
-	if err == nil {
-		info.CPUTemp = cpuTemp
+	if err != nil {
+		return nil, fmt.Errorf("get CPU temperature: %w", err)
 	}
+	info.CPUTemp = cpuTemp
 
 	// Get available updates
 	updates, err := s.getAvailableUpdates()
-	if err == nil {
-		info.UpdatesAvail = updates
+	if err != nil {
+		return nil, fmt.Errorf("get available updates: %w", err)
 	}
+	info.UpdatesAvail = updates
 
 	return info, nil
 }
@@ -159,10 +164,14 @@ func parseCPUTemperature(data []byte) (float64, error) {
 
 // getAvailableUpdates retrieves the number of available package updates
 func (s *SystemService) getAvailableUpdates() (int, error) {
+	if err := exec.Command("apt", "update").Run(); err != nil {
+		return 0, fmt.Errorf("update package cache: %w", err)
+	}
+
 	cmd := exec.Command("apt", "list", "--upgradable")
 	output, err := cmd.Output()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("list available updates: %w", err)
 	}
 
 	return parseAvailableUpdates(output), nil
