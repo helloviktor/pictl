@@ -3,6 +3,7 @@ package services
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -74,23 +75,28 @@ func (s *SystemService) getMemoryUsage() (float64, error) {
 	}
 	defer file.Close()
 
+	return parseMemoryUsage(file)
+}
+
+func parseMemoryUsage(input io.Reader) (float64, error) {
 	var memTotal, memAvail float64
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(input)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "MemTotal:") {
 			parts := strings.Fields(line)
 			if len(parts) > 1 {
-				val, _ := strconv.ParseFloat(parts[1], 64)
-				memTotal = val
+				memTotal, _ = strconv.ParseFloat(parts[1], 64)
 			}
 		} else if strings.HasPrefix(line, "MemAvailable:") {
 			parts := strings.Fields(line)
 			if len(parts) > 1 {
-				val, _ := strconv.ParseFloat(parts[1], 64)
-				memAvail = val
+				memAvail, _ = strconv.ParseFloat(parts[1], 64)
 			}
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, err
 	}
 
 	if memTotal == 0 {
@@ -109,6 +115,10 @@ func (s *SystemService) getDiskUsage() (float64, error) {
 		return 0, err
 	}
 
+	return parseDiskUsage(output)
+}
+
+func parseDiskUsage(output []byte) (float64, error) {
 	lines := strings.Split(string(output), "\n")
 	if len(lines) < 2 {
 		return 0, fmt.Errorf("could not parse df output")
@@ -133,6 +143,10 @@ func (s *SystemService) getCPUTemperature() (float64, error) {
 		return 0, err
 	}
 
+	return parseCPUTemperature(data)
+}
+
+func parseCPUTemperature(data []byte) (float64, error) {
 	tempStr := strings.TrimSpace(string(data))
 	tempMilliC, err := strconv.ParseFloat(tempStr, 64)
 	if err != nil {
@@ -151,6 +165,10 @@ func (s *SystemService) getAvailableUpdates() (int, error) {
 		return 0, err
 	}
 
+	return parseAvailableUpdates(output), nil
+}
+
+func parseAvailableUpdates(output []byte) int {
 	// Count non-empty lines, excluding the first header line if present
 	lines := strings.Split(string(output), "\n")
 	count := 0
@@ -160,7 +178,7 @@ func (s *SystemService) getAvailableUpdates() (int, error) {
 		}
 	}
 
-	return count, nil
+	return count
 }
 
 // UpdateSystem runs system update
