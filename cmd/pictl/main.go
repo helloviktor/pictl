@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -40,6 +41,17 @@ func main() {
 		return
 	}
 
+	if flag.NArg() == 0 {
+		if isSystemdSocketActivated() {
+			if err := serveSystemd(service); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
+		flag.Usage()
+		return
+	}
+
 	if flag.NArg() != 1 {
 		flag.Usage()
 		return
@@ -48,6 +60,37 @@ func main() {
 	if err := runCommand(flag.Arg(0), service, os.Stdout); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// isSystemdSocketActivated returns true if the process was launched via systemd socket activation
+func isSystemdSocketActivated() bool {
+	fds, err := strconv.Atoi(os.Getenv("LISTEN_FDS"))
+	if err != nil || fds < 1 {
+		return false
+	}
+	if pid := os.Getenv("LISTEN_PID"); pid != "" && pid != strconv.Itoa(os.Getpid()) {
+		return false
+	}
+	return true
+}
+
+// serveSystemd listens on the socket passed by systemd via file descriptor 3
+func serveSystemd(service *services.SystemService) error {
+	file := os.NewFile(uintptr(3), "systemd-socket")
+	if file == nil {
+		return errors.New("failed to create file from fd 3")
+	}
+	defer file.Close()
+
+	listener, err := net.FileListener(file)
+	if err != nil {
+		return fmt.Errorf("create listener from systemd socket: %w", err)
+	}
+	defer listener.Close()
+
+	log.Println("Listening on systemd socket")
+
+	return serveListener(listener, service)
 }
 
 // runCommand executes a single command, writing any result to out
@@ -70,7 +113,7 @@ func runCommand(command string, service *services.SystemService, out io.Writer) 
 	}
 }
 
-// serveSocket listens on a Unix socket and executes commands received over connections
+// serveSocket listens on a Unix socket at socketPath and executes commands received over connections
 func serveSocket(socketPath string, service *services.SystemService) error {
 	// Remove any stale socket file left over from a previous run
 	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
@@ -81,16 +124,22 @@ func serveSocket(socketPath string, service *services.SystemService) error {
 	if err != nil {
 		return fmt.Errorf("listen on socket: %w", err)
 	}
+	defer listener.Close()
 	defer os.Remove(socketPath)
 
+	log.Printf("Listening on socket %s\n", socketPath)
+
+	return serveListener(listener, service)
+}
+
+// serveListener accepts connections on listener and executes commands
+func serveListener(listener net.Listener, service *services.SystemService) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
 		listener.Close()
 	}()
-
-	log.Printf("Listening on socket %s\n", socketPath)
 
 	for {
 		conn, err := listener.Accept()
