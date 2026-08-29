@@ -1,52 +1,131 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 
 	"github.com/pictl/pictl/internal/services"
 )
 
 func main() {
+	socketPath := flag.String("socket", "", "path to a Unix socket to listen on for commands")
 	flag.Usage = func() {
-		fmt.Println("Usage: pictl <info|update|restart|shutdown>")
+		fmt.Println("Usage: pictl [-socket <path>] <info|update|restart|shutdown>")
 		fmt.Println("\nCommands:")
 		fmt.Println("  info      print current system information as JSON")
 		fmt.Println("  update    update installed system packages")
 		fmt.Println("  restart   restart the device")
 		fmt.Println("  shutdown  shut down the device")
+		fmt.Println("\nFlags:")
+		fmt.Println("  -socket   listen on a Unix socket and execute commands received over it, one per line")
 	}
 	flag.Parse()
+
+	service := services.NewSystemService()
+
+	if *socketPath != "" {
+		if err := serveSocket(*socketPath, service); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	if flag.NArg() != 1 {
 		flag.Usage()
 		return
 	}
 
-	service := services.NewSystemService()
-	var err error
+	if err := runCommand(flag.Arg(0), service, os.Stdout); err != nil {
+		log.Fatal(err)
+	}
+}
 
-	switch flag.Arg(0) {
+// runCommand executes a single command, writing any result to out
+func runCommand(command string, service *services.SystemService, out io.Writer) error {
+	switch command {
 	case "info":
-		var info any
-		info, err = service.GetSystemInfo()
-		if err == nil {
-			err = json.NewEncoder(log.Writer()).Encode(info)
+		info, err := service.GetSystemInfo()
+		if err != nil {
+			return err
 		}
+		return json.NewEncoder(out).Encode(info)
 	case "update":
-		err = service.UpdateSystem()
+		return service.UpdateSystem()
 	case "restart":
-		err = service.RestartSystem()
+		return service.RestartSystem()
 	case "shutdown":
-		err = service.ShutdownSystem()
+		return service.ShutdownSystem()
 	default:
-		flag.Usage()
-		return
+		return fmt.Errorf("unknown command: %s", command)
+	}
+}
+
+// serveSocket listens on a Unix socket and executes commands received over connections
+func serveSocket(socketPath string, service *services.SystemService) error {
+	// Remove any stale socket file left over from a previous run
+	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove stale socket: %w", err)
 	}
 
+	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("listen on socket: %w", err)
+	}
+	defer os.Remove(socketPath)
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		listener.Close()
+	}()
+
+	log.Printf("Listening on socket %s\n", socketPath)
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return nil
+			}
+			// A single failed accept shouldn't bring down the server; log and keep serving.
+			log.Printf("accept connection: %v\n", err)
+			continue
+		}
+
+		go handleConn(conn, service)
+	}
+}
+
+// handleConn reads newline-terminated commands from conn and executes them
+func handleConn(conn net.Conn, service *services.SystemService) {
+	defer conn.Close()
+
+	scanner := bufio.NewScanner(conn)
+	for scanner.Scan() {
+		command := strings.TrimSpace(scanner.Text())
+		if command == "" {
+			continue
+		}
+
+		if err := runCommand(command, service, conn); err != nil {
+			fmt.Fprintf(conn, "ERROR: %v\n", err)
+			continue
+		}
+		fmt.Fprintln(conn, "OK")
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(conn, "ERROR: %v\n", err)
 	}
 }
