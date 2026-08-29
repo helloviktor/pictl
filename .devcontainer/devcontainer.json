@@ -3,7 +3,8 @@
     "customizations": {
         "vscode": {
             "extensions": [
-                "golang.Go"
+                "golang.Go",
+                "ms-vscode.makefile-tools"
             ]
         }
     }
