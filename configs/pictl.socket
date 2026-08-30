@@ -1,0 +1,11 @@
+[Unit]
+Description=pictl Helper Socket
+
+[Socket]
+ListenStream=/run/pictl.sock
+SocketUser=root
+SocketGroup=pictl
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

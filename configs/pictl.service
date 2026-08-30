@@ -1,0 +1,13 @@
+[Unit]
+Description=pictl System Control Helper Service
+Requires=pictl.socket
+After=pictl.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pictl
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
