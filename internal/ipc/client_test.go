@@ -72,8 +72,12 @@ func TestSendCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
+	defer client.Close()
 
-	result := client.SendCommand("ping")
+	result, err := client.SendCommand("ping")
+	if err != nil {
+		t.Fatalf("SendCommand returned an error: %v", err)
+	}
 	if result != "echo:ping" {
 		t.Fatalf("expected 'echo:ping', got %v", result)
 	}
@@ -92,6 +96,7 @@ func TestSendCommandConcurrent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
+	defer client.Close()
 
 	const numGoroutines = 10
 	var wg sync.WaitGroup
@@ -100,7 +105,11 @@ func TestSendCommandConcurrent(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func(val float64) {
 			defer wg.Done()
-			res := client.SendCommand(val)
+			res, err := client.SendCommand(val)
+			if err != nil {
+				t.Errorf("SendCommand returned an error: %v", err)
+				return
+			}
 			if res != val {
 				t.Errorf("expected response %v, got %v", val, res)
 			}

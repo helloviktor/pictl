@@ -5,20 +5,26 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
-	"time"
 
 	"github.com/pictl/pictl/internal/models"
-	"github.com/pictl/pictl/internal/services"
 )
+
+// SystemService is the subset of system operations Handlers depends on.
+type SystemService interface {
+	SystemInfo() (models.SystemInfo, error)
+	UpdateSystem() error
+	RestartSystem() error
+	ShutdownSystem() error
+}
 
 // Handlers handles HTTP requests
 type Handlers struct {
-	sysService *services.SystemService
+	sysService SystemService
 	staticFS   embed.FS
 }
 
 // NewHandlers creates a new Handlers instance
-func NewHandlers(sysService *services.SystemService, staticFS embed.FS) *Handlers {
+func NewHandlers(sysService SystemService, staticFS embed.FS) *Handlers {
 	return &Handlers{
 		sysService: sysService,
 		staticFS:   staticFS,
@@ -67,43 +73,10 @@ func (h *Handlers) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cpuUsage, err := h.sysService.CPUUsage()
+	info, err := h.sysService.SystemInfo()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	memoryUsage, err := h.sysService.MemoryUsage()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	diskUsage, err := h.sysService.DiskUsage()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	cpuTemp, err := h.sysService.CPUTemperature()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	updatesAvail, err := h.sysService.AvailableUpdates()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	info := models.SystemInfo{
-		CPUUsage:     cpuUsage,
-		MemoryUsage:  memoryUsage,
-		DiskUsage:    diskUsage,
-		CPUTemp:      cpuTemp,
-		LastUpdate:   time.Now().Format("2006-01-02 15:04:05"),
-		UpdatesAvail: updatesAvail,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

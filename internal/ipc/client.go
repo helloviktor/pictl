@@ -3,6 +3,7 @@ package ipc
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"log"
 	"net"
 	"sync"
@@ -16,7 +17,8 @@ type Request struct {
 
 type Response struct {
 	Id     uint64 `json:"id"`
-	Result any    `json:"result"`
+	Result any    `json:"result,omitempty"`
+	Error  string `json:"error,omitempty"`
 }
 
 type Client struct {
@@ -72,7 +74,7 @@ func (c *Client) reader() {
 	}
 }
 
-func (c *Client) SendCommand(command any) any {
+func (c *Client) SendCommand(command any) (any, error) {
 	id := c.nextId.Add(1)
 	response := make(chan Response)
 
@@ -87,5 +89,14 @@ func (c *Client) SendCommand(command any) any {
 
 	result := <-response
 
-	return result.Result
+	if result.Error != "" {
+		return nil, errors.New(result.Error)
+	}
+
+	return result.Result, nil
+}
+
+// Close closes the underlying connection to the server.
+func (c *Client) Close() error {
+	return c.conn.Close()
 }

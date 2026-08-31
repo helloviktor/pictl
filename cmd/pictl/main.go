@@ -14,9 +14,9 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/pictl/pictl/internal/host"
+	"github.com/pictl/pictl/internal/ipc"
 	"github.com/pictl/pictl/internal/models"
 	"github.com/pictl/pictl/internal/services"
 )
@@ -98,57 +98,36 @@ func serveSystemd(service *services.SystemService) error {
 
 // runCommand executes a single command, writing any result to out
 func runCommand(command string, service *services.SystemService, out io.Writer) error {
-	switch command {
-	case "info":
-		return writeSystemInfo(service, out)
-	case "update":
-		return service.UpdateSystem()
-	case "restart":
-		return service.RestartSystem()
-	case "shutdown":
-		return service.ShutdownSystem()
-	default:
-		return fmt.Errorf("unknown command: %s", command)
+	result, err := executeCommand(command, service)
+	if err != nil {
+		return err
 	}
+	return json.NewEncoder(out).Encode(result)
 }
 
-// writeSystemInfo gathers current system information and writes it to out as JSON
-func writeSystemInfo(service *services.SystemService, out io.Writer) error {
-	cpuUsage, err := service.CPUUsage()
-	if err != nil {
-		return err
+// executeCommand runs command against service and returns its result
+func executeCommand(command string, service *services.SystemService) (any, error) {
+	switch command {
+	case "info":
+		return service.SystemInfo()
+	case "update":
+		if err := service.UpdateSystem(); err != nil {
+			return nil, err
+		}
+		return models.UpdateResponse{Success: true, Message: "System update started"}, nil
+	case "restart":
+		if err := service.RestartSystem(); err != nil {
+			return nil, err
+		}
+		return models.UpdateResponse{Success: true, Message: "System restart initiated"}, nil
+	case "shutdown":
+		if err := service.ShutdownSystem(); err != nil {
+			return nil, err
+		}
+		return models.UpdateResponse{Success: true, Message: "System shutdown initiated"}, nil
+	default:
+		return nil, fmt.Errorf("unknown command: %s", command)
 	}
-
-	memoryUsage, err := service.MemoryUsage()
-	if err != nil {
-		return err
-	}
-
-	diskUsage, err := service.DiskUsage()
-	if err != nil {
-		return err
-	}
-
-	cpuTemp, err := service.CPUTemperature()
-	if err != nil {
-		return err
-	}
-
-	updatesAvail, err := service.AvailableUpdates()
-	if err != nil {
-		return err
-	}
-
-	info := models.SystemInfo{
-		CPUUsage:     cpuUsage,
-		MemoryUsage:  memoryUsage,
-		DiskUsage:    diskUsage,
-		CPUTemp:      cpuTemp,
-		LastUpdate:   time.Now().Format("2006-01-02 15:04:05"),
-		UpdatesAvail: updatesAvail,
-	}
-
-	return json.NewEncoder(out).Encode(info)
 }
 
 // serveSocket listens on a Unix socket at socketPath and executes commands received over connections
@@ -194,25 +173,40 @@ func serveListener(listener net.Listener, service *services.SystemService) error
 	}
 }
 
-// handleConn reads newline-terminated commands from conn and executes them
+// handleConn reads newline-terminated JSON requests from conn, executes them, and writes back JSON responses
 func handleConn(conn net.Conn, service *services.SystemService) {
 	defer conn.Close()
 
 	scanner := bufio.NewScanner(conn)
+	encoder := json.NewEncoder(conn)
+
 	for scanner.Scan() {
-		command := strings.TrimSpace(scanner.Text())
-		if command == "" {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
 			continue
 		}
 
-		if err := runCommand(command, service, conn); err != nil {
-			fmt.Fprintf(conn, "ERROR: %v\n", err)
+		var req ipc.Request
+		if err := json.Unmarshal([]byte(line), &req); err != nil {
+			encoder.Encode(ipc.Response{Error: fmt.Sprintf("invalid request: %v", err)})
 			continue
 		}
-		fmt.Fprintln(conn, "OK")
+
+		command, ok := req.Command.(string)
+		if !ok {
+			encoder.Encode(ipc.Response{Id: req.Id, Error: "command must be a string"})
+			continue
+		}
+
+		result, err := executeCommand(command, service)
+		resp := ipc.Response{Id: req.Id, Result: result}
+		if err != nil {
+			resp.Error = err.Error()
+		}
+		encoder.Encode(resp)
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(conn, "ERROR: %v\n", err)
+		log.Printf("read request: %v\n", err)
 	}
 }

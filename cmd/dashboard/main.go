@@ -10,17 +10,21 @@ import (
 	"syscall"
 
 	"github.com/pictl/pictl/internal/handlers"
-	"github.com/pictl/pictl/internal/host"
 	"github.com/pictl/pictl/internal/services"
 	"github.com/pictl/pictl/web"
 )
 
 func main() {
 	addr := flag.String("addr", ":8080", "HTTP server address")
+	socketPath := flag.String("socket", "/run/pictl.sock", "path to the pictl helper's Unix socket")
 	flag.Parse()
 
 	// Initialize services
-	sysService := services.NewSystemService(host.NewDummy())
+	sysService, err := services.NewRemoteSystemService(*socketPath)
+	if err != nil {
+		log.Fatalf("connect to pictl: %v\n", err)
+	}
+	defer sysService.Close()
 
 	// Initialize handlers
 	h := handlers.NewHandlers(sysService, web.StaticFS)
