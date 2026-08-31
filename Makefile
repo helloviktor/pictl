@@ -1,4 +1,4 @@
-.PHONY: build run clean test help
+.PHONY: build run clean test help deploy
 
 # Variables
 OUTPUT_DIR=out
@@ -17,6 +17,7 @@ help:
 	@echo "  make test        - Run tests"
 	@echo "  make fmt         - Format code"
 	@echo "  make lint        - Lint code"
+	@echo "  make deploy      - Build arm64 binaries and rsync them to the host in .env"
 
 build:
 	mkdir -p $(OUTPUT_DIR)
@@ -38,5 +39,8 @@ fmt:
 
 lint:
 	golangci-lint run ./...
+
+deploy:
+	./scripts/deploy.sh
 
 .DEFAULT_GOAL := help
