@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"time"
 
 	"github.com/pictl/pictl/internal/models"
 	"github.com/pictl/pictl/internal/services"
@@ -66,10 +67,43 @@ func (h *Handlers) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := h.sysService.GetSystemInfo()
+	cpuUsage, err := h.sysService.CPUUsage()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	memoryUsage, err := h.sysService.MemoryUsage()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	diskUsage, err := h.sysService.DiskUsage()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	cpuTemp, err := h.sysService.CPUTemperature()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	updatesAvail, err := h.sysService.AvailableUpdates()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	info := models.SystemInfo{
+		CPUUsage:     cpuUsage,
+		MemoryUsage:  memoryUsage,
+		DiskUsage:    diskUsage,
+		CPUTemp:      cpuTemp,
+		LastUpdate:   time.Now().Format("2006-01-02 15:04:05"),
+		UpdatesAvail: updatesAvail,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

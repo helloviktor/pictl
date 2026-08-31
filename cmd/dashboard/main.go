@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/pictl/pictl/internal/handlers"
+	"github.com/pictl/pictl/internal/host"
 	"github.com/pictl/pictl/internal/services"
 	"github.com/pictl/pictl/web"
 )
@@ -19,7 +20,7 @@ func main() {
 	flag.Parse()
 
 	// Initialize services
-	sysService := services.NewSystemService()
+	sysService := services.NewSystemService(host.NewDummy())
 
 	// Initialize handlers
 	h := handlers.NewHandlers(sysService, web.StaticFS)

@@ -14,7 +14,10 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
+	"github.com/pictl/pictl/internal/host"
+	"github.com/pictl/pictl/internal/models"
 	"github.com/pictl/pictl/internal/services"
 )
 
@@ -32,7 +35,7 @@ func main() {
 	}
 	flag.Parse()
 
-	service := services.NewSystemService()
+	service := services.NewSystemService(host.NewDummy())
 
 	if *socketPath != "" {
 		if err := serveSocket(*socketPath, service); err != nil {
@@ -97,11 +100,7 @@ func serveSystemd(service *services.SystemService) error {
 func runCommand(command string, service *services.SystemService, out io.Writer) error {
 	switch command {
 	case "info":
-		info, err := service.GetSystemInfo()
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(out).Encode(info)
+		return writeSystemInfo(service, out)
 	case "update":
 		return service.UpdateSystem()
 	case "restart":
@@ -111,6 +110,45 @@ func runCommand(command string, service *services.SystemService, out io.Writer) 
 	default:
 		return fmt.Errorf("unknown command: %s", command)
 	}
+}
+
+// writeSystemInfo gathers current system information and writes it to out as JSON
+func writeSystemInfo(service *services.SystemService, out io.Writer) error {
+	cpuUsage, err := service.CPUUsage()
+	if err != nil {
+		return err
+	}
+
+	memoryUsage, err := service.MemoryUsage()
+	if err != nil {
+		return err
+	}
+
+	diskUsage, err := service.DiskUsage()
+	if err != nil {
+		return err
+	}
+
+	cpuTemp, err := service.CPUTemperature()
+	if err != nil {
+		return err
+	}
+
+	updatesAvail, err := service.AvailableUpdates()
+	if err != nil {
+		return err
+	}
+
+	info := models.SystemInfo{
+		CPUUsage:     cpuUsage,
+		MemoryUsage:  memoryUsage,
+		DiskUsage:    diskUsage,
+		CPUTemp:      cpuTemp,
+		LastUpdate:   time.Now().Format("2006-01-02 15:04:05"),
+		UpdatesAvail: updatesAvail,
+	}
+
+	return json.NewEncoder(out).Encode(info)
 }
 
 // serveSocket listens on a Unix socket at socketPath and executes commands received over connections
