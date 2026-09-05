@@ -7,11 +7,14 @@ PICTL_BINARY=$(OUTPUT_DIR)/pictl
 GO=go
 GOFLAGS=-v
 GOARCH?=$(shell $(GO) env GOARCH)
+TAGS?=
+TAGS_FLAG=$(if $(TAGS),-tags $(TAGS),)
 
 help:
 	@echo "Available targets:"
 	@echo "  make build       - Build the application"
 	@echo "                    Set GOARCH to choose the binary architecture (for example, GOARCH=arm64)"
+	@echo "                    Set TAGS to specify build tags (for example, TAGS=rpi)"
 	@echo "  make run         - Run the application"
 	@echo "  make clean       - Clean build artifacts"
 	@echo "  make test        - Run tests"
@@ -21,8 +24,8 @@ help:
 
 build:
 	mkdir -p $(OUTPUT_DIR)
-	GOARCH=$(GOARCH) $(GO) build $(GOFLAGS) -o $(DASHBOARD_BINARY) ./cmd/dashboard
-	GOARCH=$(GOARCH) $(GO) build $(GOFLAGS) -o $(PICTL_BINARY) ./cmd/pictl
+	GOARCH=$(GOARCH) $(GO) build $(GOFLAGS) $(TAGS_FLAG) -o $(DASHBOARD_BINARY) ./cmd/dashboard
+	GOARCH=$(GOARCH) $(GO) build $(GOFLAGS) $(TAGS_FLAG) -o $(PICTL_BINARY) ./cmd/pictl
 
 run: build
 	./$(DASHBOARD_BINARY)
@@ -32,7 +35,7 @@ clean:
 	rm -rf $(OUTPUT_DIR)
 
 test:
-	$(GO) test -v ./...
+	$(GO) test -v $(TAGS_FLAG) ./...
 
 fmt:
 	$(GO) fmt ./...

@@ -1,11 +1,13 @@
+//go:build !rpi
+
 package host
 
 // Dummy is a Host implementation that returns stub values without touching the
 // host system. For local development and testing purposes only.
 type Dummy struct{}
 
-// NewDummy creates a new Dummy.
-func NewDummy() *Dummy {
+// NewHost creates a new dummy host.
+func NewHost() *Dummy {
 	return &Dummy{}
 }
 

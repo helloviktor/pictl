@@ -21,7 +21,7 @@ DEPLOY_SSH_PORT="${DEPLOY_SSH_PORT:-22}"
 OUTPUT_DIR="out"
 
 echo "Building arm64 binaries..."
-GOARCH=arm64 make build
+GOARCH=arm64 TAGS="${TAGS:-rpi}" make build
 
 echo "Deploying to ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}..."
 rsync -avz --progress \

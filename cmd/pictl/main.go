@@ -35,7 +35,7 @@ func main() {
 	}
 	flag.Parse()
 
-	service := services.NewSystemService(host.NewDummy())
+	service := services.NewSystemService(host.NewHost())
 
 	if *socketPath != "" {
 		if err := serveSocket(*socketPath, service); err != nil {

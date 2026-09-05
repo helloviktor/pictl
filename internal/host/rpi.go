@@ -1,3 +1,5 @@
+//go:build rpi
+
 package host
 
 import (
@@ -13,8 +15,8 @@ import (
 // Pi is a Host implementation backed by real Raspberry Pi system files and commands.
 type Pi struct{}
 
-// NewPi creates a new Pi.
-func NewPi() *Pi {
+// NewHost creates a new Pi host.
+func NewHost() *Pi {
 	return &Pi{}
 }
 
