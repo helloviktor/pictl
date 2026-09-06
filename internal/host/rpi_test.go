@@ -24,24 +24,6 @@ func TestParseMemoryUsageMissingTotal(t *testing.T) {
 	}
 }
 
-func TestParseDiskUsage(t *testing.T) {
-	output := []byte("Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/root 1000 250 750 25% /\n")
-	usage, err := parseDiskUsage(output)
-	if err != nil {
-		t.Fatalf("parseDiskUsage returned an error: %v", err)
-	}
-	if usage != 25 {
-		t.Fatalf("parseDiskUsage = %v, want 25", usage)
-	}
-}
-
-func TestParseDiskUsageInvalidOutput(t *testing.T) {
-	_, err := parseDiskUsage([]byte("invalid output\n"))
-	if err == nil {
-		t.Fatal("parseDiskUsage returned nil error for invalid output")
-	}
-}
-
 func TestParseCPUTemperature(t *testing.T) {
 	temperature, err := parseCPUTemperature([]byte("52500\n"))
 	if err != nil {

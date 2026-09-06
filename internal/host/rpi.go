@@ -9,9 +9,9 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/godbus/dbus/v5"
@@ -104,30 +104,16 @@ func parseMemoryUsage(input io.Reader) (float64, error) {
 
 // DiskUsage retrieves disk usage percentage for root partition
 func (p *Pi) DiskUsage() (float64, error) {
-	cmd := exec.Command("df", "/")
-	output, err := cmd.Output()
-	if err != nil {
-		return 0, err
+	var stat syscall.Statfs_t
+
+	if err := syscall.Statfs("/", &stat); err != nil {
+		return 0, fmt.Errorf("failed to get filesystem stats: %w", err)
 	}
 
-	return parseDiskUsage(output)
-}
+	total := stat.Blocks * uint64(stat.Bsize)
+	used := total - (stat.Bfree * uint64(stat.Bsize))
 
-func parseDiskUsage(output []byte) (float64, error) {
-	lines := strings.Split(string(output), "\n")
-	if len(lines) < 2 {
-		return 0, fmt.Errorf("could not parse df output")
-	}
-
-	fields := strings.Fields(lines[1])
-	if len(fields) < 5 {
-		return 0, fmt.Errorf("unexpected df output format")
-	}
-
-	used, _ := strconv.ParseFloat(fields[2], 64)
-	total, _ := strconv.ParseFloat(fields[1], 64)
-
-	return (used / total) * 100, nil
+	return float64(used) / float64(total) * 100, nil
 }
 
 // CPUTemperature retrieves CPU temperature in Celsius
@@ -262,8 +248,8 @@ func (p *Pi) ApplyUpdates() error {
 	}
 	if len(packageIDs) == 0 {
 		log.Println("[dbus] PackageKit: No updates available to apply")
-	return nil
-}
+		return nil
+	}
 
 	log.Printf("[dbus] PackageKit: Creating transaction for UpdatePackages (%d package(s))...\n", len(packageIDs))
 	var txPath dbus.ObjectPath
