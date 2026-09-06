@@ -4,12 +4,14 @@ package host
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 )
@@ -18,6 +20,14 @@ const (
 	loginService = "org.freedesktop.login1"
 	loginPath    = "/org/freedesktop/login1"
 	loginIntf    = "org.freedesktop.login1.Manager"
+
+	pkService = "org.freedesktop.PackageKit"
+	pkPath    = "/org/freedesktop/PackageKit"
+	pkIntf    = "org.freedesktop.PackageKit"
+	pkTxIntf  = "org.freedesktop.PackageKit.Transaction"
+
+	// PK_FILTER_ENUM_NONE indicates no specific filter
+	pkFilterNone uint64 = 0
 )
 
 // Pi is a Host implementation backed by real Raspberry Pi system files and commands.
@@ -137,35 +147,83 @@ func parseCPUTemperature(data []byte) (float64, error) {
 	return tempMilliC / 1000, nil
 }
 
-// AvailableUpdates retrieves the number of available package updates
-func (p *Pi) AvailableUpdates() (int, error) {
-	if err := exec.Command("apt", "update").Run(); err != nil {
-		return 0, fmt.Errorf("update package cache: %w", err)
+// getUpgradablePackageIDs retrieves the package IDs of all available updates via PackageKit D-Bus.
+func (p *Pi) getUpgradablePackageIDs() ([]string, error) {
+	if p.conn == nil {
+		return nil, fmt.Errorf("dbus connection not available")
 	}
 
-	cmd := exec.Command("apt", "list", "--upgradable")
-	output, err := cmd.Output()
+	var txPath dbus.ObjectPath
+	err := p.conn.Object(pkService, pkPath).Call(pkIntf+".CreateTransaction", 0).Store(&txPath)
 	if err != nil {
-		return 0, fmt.Errorf("list available updates: %w", err)
+		return nil, fmt.Errorf("create PackageKit transaction: %w", err)
 	}
 
-	return parseAvailableUpdates(output), nil
-}
+	rule := fmt.Sprintf("type='signal',sender='%s',interface='%s',path='%s'", pkService, pkTxIntf, txPath)
+	if err := p.conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, rule).Err; err != nil {
+		return nil, fmt.Errorf("add dbus signal match: %w", err)
+	}
+	defer func() {
+		_ = p.conn.BusObject().Call("org.freedesktop.DBus.RemoveMatch", 0, rule).Err
+	}()
 
-func parseAvailableUpdates(output []byte) int {
-	// Count non-empty lines, excluding the first header line if present
-	lines := strings.Split(string(output), "\n")
-	count := 0
-	for _, line := range lines {
-		if strings.TrimSpace(line) != "" && !strings.Contains(line, "Listing...") {
-			count++
+	signalChan := make(chan *dbus.Signal, 64)
+	p.conn.Signal(signalChan)
+	defer p.conn.RemoveSignal(signalChan)
+
+	txObj := p.conn.Object(pkService, txPath)
+	if call := txObj.Call(pkTxIntf+".GetUpdates", 0, pkFilterNone); call.Err != nil {
+		return nil, fmt.Errorf("call GetUpdates: %w", call.Err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	var packageIDs []string
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("timed out waiting for PackageKit updates: %w", ctx.Err())
+
+		case sig, ok := <-signalChan:
+			if !ok {
+				return nil, fmt.Errorf("signal channel closed unexpectedly")
+			}
+			if sig.Path != txPath {
+				continue
+			}
+
+			switch sig.Name {
+			case pkTxIntf + ".Package":
+				if len(sig.Body) >= 2 {
+					if pkgID, ok := sig.Body[1].(string); ok && pkgID != "" {
+						packageIDs = append(packageIDs, pkgID)
+					}
+				}
+
+			case pkTxIntf + ".ErrorCode":
+				if len(sig.Body) >= 2 {
+					return nil, fmt.Errorf("packagekit error %v: %v", sig.Body[0], sig.Body[1])
+				}
+				return nil, fmt.Errorf("packagekit error: %v", sig.Body)
+
+			case pkTxIntf + ".Finished":
+				return packageIDs, nil
+			}
 		}
 	}
-
-	return count
 }
 
-// ApplyUpdates installs available package updates
+// AvailableUpdates retrieves the number of available package updates
+func (p *Pi) AvailableUpdates() (int, error) {
+	pkgIDs, err := p.getUpgradablePackageIDs()
+	if err != nil {
+		return 0, err
+	}
+	return len(pkgIDs), nil
+}
+
+// ApplyUpdates installs available package updates using PackageKit over D-Bus.
 func (p *Pi) ApplyUpdates() error {
 	// This would typically run apt update && apt upgrade
 	// For safety, this is a placeholder

@@ -58,16 +58,3 @@ func TestParseCPUTemperatureInvalidInput(t *testing.T) {
 		t.Fatal("parseCPUTemperature returned nil error for invalid input")
 	}
 }
-
-func TestParseAvailableUpdates(t *testing.T) {
-	output := []byte("Listing...\npackage-one/stable 1.0 amd64 [upgradable from: 0.9]\n\npackage-two/stable 2.0 amd64 [upgradable from: 1.9]\n")
-	if updates := parseAvailableUpdates(output); updates != 2 {
-		t.Fatalf("parseAvailableUpdates = %d, want 2", updates)
-	}
-}
-
-func TestParseAvailableUpdatesEmpty(t *testing.T) {
-	if updates := parseAvailableUpdates([]byte("Listing...\n\n")); updates != 0 {
-		t.Fatalf("parseAvailableUpdates = %d, want 0", updates)
-	}
-}
