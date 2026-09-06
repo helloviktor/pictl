@@ -7,8 +7,12 @@ package host
 type Dummy struct{}
 
 // NewHost creates a new dummy host.
-func NewHost() *Dummy {
-	return &Dummy{}
+func NewHost() (*Dummy, error) {
+	return &Dummy{}, nil
+}
+
+func (d *Dummy) Close() {
+	// No resources to clean up for the dummy host.
 }
 
 // CPUUsage returns a stub CPU usage percentage.

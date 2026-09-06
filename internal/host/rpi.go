@@ -10,14 +10,34 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/godbus/dbus/v5"
+)
+
+const (
+	loginService = "org.freedesktop.login1"
+	loginPath    = "/org/freedesktop/login1"
+	loginIntf    = "org.freedesktop.login1.Manager"
 )
 
 // Pi is a Host implementation backed by real Raspberry Pi system files and commands.
-type Pi struct{}
+type Pi struct {
+	conn *dbus.Conn
+}
 
 // NewHost creates a new Pi host.
-func NewHost() *Pi {
-	return &Pi{}
+func NewHost() (*Pi, error) {
+	conn, err := dbus.SystemBus()
+	if err != nil {
+		return &Pi{}, fmt.Errorf("failed to connect to system bus: %w", err)
+	}
+	return &Pi{conn: conn}, nil
+}
+
+func (p *Pi) Close() {
+	if p.conn != nil {
+		p.conn.Close()
+	}
 }
 
 // CPUUsage retrieves CPU usage percentage
@@ -154,12 +174,23 @@ func (p *Pi) ApplyUpdates() error {
 
 // Restart restarts the device
 func (p *Pi) Restart() error {
-	cmd := exec.Command("sudo", "shutdown", "-r", "now")
-	return cmd.Run()
+	if p.conn == nil {
+		return fmt.Errorf("dbus connection not available")
+	}
+
+	obj := p.conn.Object(loginService, loginPath)
+	// Reboot(interactive bool)
+	call := obj.Call(loginIntf+".Reboot", 0, false)
+	return call.Err
 }
 
 // Shutdown shuts down the device
 func (p *Pi) Shutdown() error {
-	cmd := exec.Command("sudo", "shutdown", "-h", "now")
-	return cmd.Run()
+	if p.conn == nil {
+		return fmt.Errorf("dbus connection not available")
+	}
+
+	obj := p.conn.Object(loginService, loginPath)
+	call := obj.Call(loginIntf+".PowerOff", 0, false)
+	return call.Err
 }
