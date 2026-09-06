@@ -249,9 +249,91 @@ func (p *Pi) AvailableUpdates() (int, error) {
 
 // ApplyUpdates installs available package updates using PackageKit over D-Bus.
 func (p *Pi) ApplyUpdates() error {
-	// This would typically run apt update && apt upgrade
-	// For safety, this is a placeholder
+	if p.conn == nil {
+		log.Println("[dbus] DBus connection not available for ApplyUpdates")
+		return fmt.Errorf("dbus connection not available")
+	}
+
+	log.Println("[dbus] PackageKit: Getting list of upgradable packages for ApplyUpdates...")
+	packageIDs, err := p.getUpgradablePackageIDs()
+	if err != nil {
+		log.Printf("[dbus] PackageKit: Failed to get upgradable packages: %v\n", err)
+		return fmt.Errorf("get upgradable packages: %w", err)
+	}
+	if len(packageIDs) == 0 {
+		log.Println("[dbus] PackageKit: No updates available to apply")
 	return nil
+}
+
+	log.Printf("[dbus] PackageKit: Creating transaction for UpdatePackages (%d package(s))...\n", len(packageIDs))
+	var txPath dbus.ObjectPath
+	err = p.conn.Object(pkService, pkPath).Call(pkIntf+".CreateTransaction", 0).Store(&txPath)
+	if err != nil {
+		log.Printf("[dbus] PackageKit: CreateTransaction failed: %v\n", err)
+		return fmt.Errorf("create PackageKit transaction: %w", err)
+	}
+	log.Printf("[dbus] PackageKit: Created transaction with path %s\n", txPath)
+
+	rule := fmt.Sprintf("type='signal',sender='%s',interface='%s',path='%s'", pkService, pkTxIntf, txPath)
+	log.Printf("[dbus] Adding match rule: %s\n", rule)
+	if err := p.conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, rule).Err; err != nil {
+		log.Printf("[dbus] AddMatch failed: %v\n", err)
+		return fmt.Errorf("add dbus signal match: %w", err)
+	}
+	defer func() {
+		log.Printf("[dbus] Removing match rule: %s\n", rule)
+		if err := p.conn.BusObject().Call("org.freedesktop.DBus.RemoveMatch", 0, rule).Err; err != nil {
+			log.Printf("[dbus] RemoveMatch failed: %v\n", err)
+		}
+	}()
+
+	signalChan := make(chan *dbus.Signal, 64)
+	p.conn.Signal(signalChan)
+	defer p.conn.RemoveSignal(signalChan)
+
+	txObj := p.conn.Object(pkService, txPath)
+	log.Printf("[dbus] PackageKit: Calling UpdatePackages for %d package(s)...\n", len(packageIDs))
+	if call := txObj.Call(pkTxIntf+".UpdatePackages", 0, pkFilterNone, packageIDs); call.Err != nil {
+		log.Printf("[dbus] PackageKit: Call UpdatePackages failed: %v\n", call.Err)
+		return fmt.Errorf("call UpdatePackages: %w", call.Err)
+	}
+
+	// Package updates may take several minutes depending on the network and storage speed
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("[dbus] PackageKit: UpdatePackages timed out: %v\n", ctx.Err())
+			return fmt.Errorf("timed out waiting for package updates: %w", ctx.Err())
+
+		case sig, ok := <-signalChan:
+			if !ok {
+				log.Println("[dbus] PackageKit: Signal channel closed unexpectedly")
+				return fmt.Errorf("signal channel closed unexpectedly")
+			}
+			if sig.Path != txPath {
+				continue
+			}
+
+			log.Printf("[dbus] PackageKit signal received: %s\n", sig.Name)
+
+			switch sig.Name {
+			case pkTxIntf + ".ErrorCode":
+				if len(sig.Body) >= 2 {
+					log.Printf("[dbus] PackageKit error code %v: %v\n", sig.Body[0], sig.Body[1])
+					return fmt.Errorf("packagekit error %v: %v", sig.Body[0], sig.Body[1])
+				}
+				log.Printf("[dbus] PackageKit error: %v\n", sig.Body)
+				return fmt.Errorf("packagekit error: %v", sig.Body)
+
+			case pkTxIntf + ".Finished":
+				log.Println("[dbus] PackageKit: UpdatePackages finished successfully")
+				return nil
+			}
+		}
+	}
 }
 
 // Restart restarts the device
