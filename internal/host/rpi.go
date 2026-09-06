@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -37,15 +38,19 @@ type Pi struct {
 
 // NewHost creates a new Pi host.
 func NewHost() (*Pi, error) {
+	log.Println("[dbus] Connecting to system bus...")
 	conn, err := dbus.SystemBus()
 	if err != nil {
+		log.Printf("[dbus] Failed to connect to system bus: %v\n", err)
 		return &Pi{}, fmt.Errorf("failed to connect to system bus: %w", err)
 	}
+	log.Println("[dbus] Connected to system bus successfully")
 	return &Pi{conn: conn}, nil
 }
 
 func (p *Pi) Close() {
 	if p.conn != nil {
+		log.Println("[dbus] Closing system bus connection")
 		p.conn.Close()
 	}
 }
@@ -150,21 +155,30 @@ func parseCPUTemperature(data []byte) (float64, error) {
 // getUpgradablePackageIDs retrieves the package IDs of all available updates via PackageKit D-Bus.
 func (p *Pi) getUpgradablePackageIDs() ([]string, error) {
 	if p.conn == nil {
+		log.Println("[dbus] DBus connection not available for getUpgradablePackageIDs")
 		return nil, fmt.Errorf("dbus connection not available")
 	}
 
+	log.Println("[dbus] PackageKit: Creating transaction for GetUpdates...")
 	var txPath dbus.ObjectPath
 	err := p.conn.Object(pkService, pkPath).Call(pkIntf+".CreateTransaction", 0).Store(&txPath)
 	if err != nil {
+		log.Printf("[dbus] PackageKit: CreateTransaction failed: %v\n", err)
 		return nil, fmt.Errorf("create PackageKit transaction: %w", err)
 	}
+	log.Printf("[dbus] PackageKit: Created transaction with path %s\n", txPath)
 
 	rule := fmt.Sprintf("type='signal',sender='%s',interface='%s',path='%s'", pkService, pkTxIntf, txPath)
+	log.Printf("[dbus] Adding match rule: %s\n", rule)
 	if err := p.conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, rule).Err; err != nil {
+		log.Printf("[dbus] AddMatch failed: %v\n", err)
 		return nil, fmt.Errorf("add dbus signal match: %w", err)
 	}
 	defer func() {
-		_ = p.conn.BusObject().Call("org.freedesktop.DBus.RemoveMatch", 0, rule).Err
+		log.Printf("[dbus] Removing match rule: %s\n", rule)
+		if err := p.conn.BusObject().Call("org.freedesktop.DBus.RemoveMatch", 0, rule).Err; err != nil {
+			log.Printf("[dbus] RemoveMatch failed: %v\n", err)
+		}
 	}()
 
 	signalChan := make(chan *dbus.Signal, 64)
@@ -172,7 +186,9 @@ func (p *Pi) getUpgradablePackageIDs() ([]string, error) {
 	defer p.conn.RemoveSignal(signalChan)
 
 	txObj := p.conn.Object(pkService, txPath)
+	log.Println("[dbus] PackageKit: Calling GetUpdates...")
 	if call := txObj.Call(pkTxIntf+".GetUpdates", 0, pkFilterNone); call.Err != nil {
+		log.Printf("[dbus] PackageKit: Call GetUpdates failed: %v\n", call.Err)
 		return nil, fmt.Errorf("call GetUpdates: %w", call.Err)
 	}
 
@@ -183,31 +199,39 @@ func (p *Pi) getUpgradablePackageIDs() ([]string, error) {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Printf("[dbus] PackageKit: GetUpdates timed out: %v\n", ctx.Err())
 			return nil, fmt.Errorf("timed out waiting for PackageKit updates: %w", ctx.Err())
 
 		case sig, ok := <-signalChan:
 			if !ok {
+				log.Println("[dbus] PackageKit: Signal channel closed unexpectedly")
 				return nil, fmt.Errorf("signal channel closed unexpectedly")
 			}
 			if sig.Path != txPath {
 				continue
 			}
 
+			log.Printf("[dbus] PackageKit signal received: %s\n", sig.Name)
+
 			switch sig.Name {
 			case pkTxIntf + ".Package":
 				if len(sig.Body) >= 2 {
 					if pkgID, ok := sig.Body[1].(string); ok && pkgID != "" {
+						log.Printf("[dbus] PackageKit: Found upgradable package: %s\n", pkgID)
 						packageIDs = append(packageIDs, pkgID)
 					}
 				}
 
 			case pkTxIntf + ".ErrorCode":
 				if len(sig.Body) >= 2 {
+					log.Printf("[dbus] PackageKit error code %v: %v\n", sig.Body[0], sig.Body[1])
 					return nil, fmt.Errorf("packagekit error %v: %v", sig.Body[0], sig.Body[1])
 				}
+				log.Printf("[dbus] PackageKit error: %v\n", sig.Body)
 				return nil, fmt.Errorf("packagekit error: %v", sig.Body)
 
 			case pkTxIntf + ".Finished":
+				log.Printf("[dbus] PackageKit: GetUpdates finished successfully (%d package(s) found)\n", len(packageIDs))
 				return packageIDs, nil
 			}
 		}
@@ -233,22 +257,36 @@ func (p *Pi) ApplyUpdates() error {
 // Restart restarts the device
 func (p *Pi) Restart() error {
 	if p.conn == nil {
+		log.Println("[dbus] DBus connection not available for Restart")
 		return fmt.Errorf("dbus connection not available")
 	}
 
+	log.Println("[dbus] logind: Calling Reboot...")
 	obj := p.conn.Object(loginService, loginPath)
 	// Reboot(interactive bool)
 	call := obj.Call(loginIntf+".Reboot", 0, false)
-	return call.Err
+	if call.Err != nil {
+		log.Printf("[dbus] logind: Reboot call failed: %v\n", call.Err)
+		return call.Err
+	}
+	log.Println("[dbus] logind: Reboot request sent successfully")
+	return nil
 }
 
 // Shutdown shuts down the device
 func (p *Pi) Shutdown() error {
 	if p.conn == nil {
+		log.Println("[dbus] DBus connection not available for Shutdown")
 		return fmt.Errorf("dbus connection not available")
 	}
 
+	log.Println("[dbus] logind: Calling PowerOff...")
 	obj := p.conn.Object(loginService, loginPath)
 	call := obj.Call(loginIntf+".PowerOff", 0, false)
-	return call.Err
+	if call.Err != nil {
+		log.Printf("[dbus] logind: PowerOff call failed: %v\n", call.Err)
+		return call.Err
+	}
+	log.Println("[dbus] logind: PowerOff request sent successfully")
+	return nil
 }
