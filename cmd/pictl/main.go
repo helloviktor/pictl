@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -18,55 +17,36 @@ import (
 	"github.com/pictl/pictl/internal/host"
 	"github.com/pictl/pictl/internal/ipc"
 	"github.com/pictl/pictl/internal/models"
-	"github.com/pictl/pictl/internal/services"
 )
 
 func main() {
 	socketPath := flag.String("socket", "", "path to a Unix socket to listen on for commands")
 	flag.Usage = func() {
-		fmt.Println("Usage: pictl [-socket <path>] <info|update|restart|shutdown>")
-		fmt.Println("\nCommands:")
-		fmt.Println("  info      print current system information as JSON")
-		fmt.Println("  update    update installed system packages")
-		fmt.Println("  restart   restart the device")
-		fmt.Println("  shutdown  shut down the device")
-		fmt.Println("\nFlags:")
-		fmt.Println("  -socket   listen on a Unix socket and execute commands received over it, one per line")
+		fmt.Println("Usage: pictl -socket <path>")
+		fmt.Println("\nListens on a Unix socket and executes commands received over it, one JSON request per line.")
+		fmt.Println("With no -socket flag, expects to be launched via systemd socket activation.")
 	}
 	flag.Parse()
 
-	host, err := host.NewHost()
+	if *socketPath == "" && !isSystemdSocketActivated() {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	h, err := host.NewHost()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer host.Close()
-
-	service := services.NewSystemService(host)
+	defer h.Close()
 
 	if *socketPath != "" {
-		if err := serveSocket(*socketPath, service); err != nil {
+		if err := serveSocket(*socketPath, h); err != nil {
 			log.Fatal(err)
 		}
 		return
 	}
 
-	if flag.NArg() == 0 {
-		if isSystemdSocketActivated() {
-			if err := serveSystemd(service); err != nil {
-				log.Fatal(err)
-			}
-			return
-		}
-		flag.Usage()
-		return
-	}
-
-	if flag.NArg() != 1 {
-		flag.Usage()
-		return
-	}
-
-	if err := runCommand(flag.Arg(0), service, os.Stdout); err != nil {
+	if err := serveSystemd(h); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -84,7 +64,7 @@ func isSystemdSocketActivated() bool {
 }
 
 // serveSystemd listens on the socket passed by systemd via file descriptor 3
-func serveSystemd(service *services.SystemService) error {
+func serveSystemd(h host.Host) error {
 	file := os.NewFile(uintptr(3), "systemd-socket")
 	if file == nil {
 		return errors.New("failed to create file from fd 3")
@@ -99,35 +79,34 @@ func serveSystemd(service *services.SystemService) error {
 
 	log.Println("Listening on systemd socket")
 
-	return serveListener(listener, service)
+	return serveListener(listener, h)
 }
 
-// runCommand executes a single command, writing any result to out
-func runCommand(command string, service *services.SystemService, out io.Writer) error {
-	result, err := executeCommand(command, service)
-	if err != nil {
-		return err
-	}
-	return json.NewEncoder(out).Encode(result)
-}
-
-// executeCommand runs command against service and returns its result
-func executeCommand(command string, service *services.SystemService) (any, error) {
+// executeCommand runs command against h and returns its result
+func executeCommand(command string, h host.Host) (any, error) {
 	switch command {
-	case "info":
-		return service.SystemInfo()
-	case "update":
-		if err := service.UpdateSystem(); err != nil {
+	case "cpu_usage":
+		return h.CPUUsage()
+	case "memory_usage":
+		return h.MemoryUsage()
+	case "disk_usage":
+		return h.DiskUsage()
+	case "cpu_temperature":
+		return h.CPUTemperature()
+	case "available_updates":
+		return h.AvailableUpdates()
+	case "apply_updates":
+		if err := h.ApplyUpdates(); err != nil {
 			return nil, err
 		}
 		return models.UpdateResponse{Success: true, Message: "System update started"}, nil
 	case "restart":
-		if err := service.RestartSystem(); err != nil {
+		if err := h.Restart(); err != nil {
 			return nil, err
 		}
 		return models.UpdateResponse{Success: true, Message: "System restart initiated"}, nil
 	case "shutdown":
-		if err := service.ShutdownSystem(); err != nil {
+		if err := h.Shutdown(); err != nil {
 			return nil, err
 		}
 		return models.UpdateResponse{Success: true, Message: "System shutdown initiated"}, nil
@@ -137,7 +116,7 @@ func executeCommand(command string, service *services.SystemService) (any, error
 }
 
 // serveSocket listens on a Unix socket at socketPath and executes commands received over connections
-func serveSocket(socketPath string, service *services.SystemService) error {
+func serveSocket(socketPath string, h host.Host) error {
 	// Remove any stale socket file left over from a previous run
 	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove stale socket: %w", err)
@@ -152,11 +131,11 @@ func serveSocket(socketPath string, service *services.SystemService) error {
 
 	log.Printf("Listening on socket %s\n", socketPath)
 
-	return serveListener(listener, service)
+	return serveListener(listener, h)
 }
 
 // serveListener accepts connections on listener and executes commands
-func serveListener(listener net.Listener, service *services.SystemService) error {
+func serveListener(listener net.Listener, h host.Host) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -175,12 +154,12 @@ func serveListener(listener net.Listener, service *services.SystemService) error
 			continue
 		}
 
-		go handleConn(conn, service)
+		go handleConn(conn, h)
 	}
 }
 
 // handleConn reads newline-terminated JSON requests from conn, executes them, and writes back JSON responses
-func handleConn(conn net.Conn, service *services.SystemService) {
+func handleConn(conn net.Conn, h host.Host) {
 	defer conn.Close()
 
 	scanner := bufio.NewScanner(conn)
@@ -204,7 +183,7 @@ func handleConn(conn net.Conn, service *services.SystemService) {
 			continue
 		}
 
-		result, err := executeCommand(command, service)
+		result, err := executeCommand(command, h)
 		resp := ipc.Response{Id: req.Id, Result: result}
 		if err != nil {
 			resp.Error = err.Error()
