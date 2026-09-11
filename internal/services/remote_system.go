@@ -4,29 +4,25 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/pictl/pictl/internal/ipc"
 	"github.com/pictl/pictl/internal/models"
 )
+
+// IpcClient is the subset of ipc.Client that RemoteSystemService depends on.
+type IpcClient interface {
+	SendCommand(command any) (any, error)
+	Close() error
+}
 
 // RemoteSystemService provides system information and control by delegating
 // to the privileged pictl helper process over a Unix socket, instead of
 // interacting with the host directly.
 type RemoteSystemService struct {
-	client *ipc.Client
+	client IpcClient
 }
 
-// NewRemoteSystemService connects to the pictl helper socket at socketPath.
-func NewRemoteSystemService(socketPath string) (*RemoteSystemService, error) {
-	client, err := ipc.NewClient(socketPath)
-	if err != nil {
-		return nil, fmt.Errorf("connect to pictl socket: %w", err)
-	}
-	return &RemoteSystemService{client: client}, nil
-}
-
-// Close closes the underlying connection to the pictl helper process.
-func (s *RemoteSystemService) Close() error {
-	return s.client.Close()
+// NewRemoteSystemService creates a RemoteSystemService backed by the given IpcClient.
+func NewRemoteSystemService(client IpcClient) *RemoteSystemService {
+	return &RemoteSystemService{client: client}
 }
 
 // SystemInfo retrieves current system information from the pictl helper process
