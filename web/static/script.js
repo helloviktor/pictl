@@ -1,26 +1,44 @@
 // Update system information
-async function updateSystemInfo() {
-    try {
-        const response = await fetch('/api/system/info');
-        const data = await response.json();
+function updateSystemInfo() {
+    fetch('/api/system/cpu-usage')
+        .then(r => r.json())
+        .then(cpuUsage => {
+            document.getElementById('cpu-usage').textContent = cpuUsage.toFixed(1) + '%';
+            document.getElementById('cpu-progress').style.width = cpuUsage + '%';
+        })
+        .catch(error => console.error('Error fetching CPU usage:', error));
 
-        // Update UI with system info
-        document.getElementById('cpu-usage').textContent = data.cpu_usage.toFixed(1) + '%';
-        document.getElementById('cpu-progress').style.width = data.cpu_usage + '%';
+    fetch('/api/system/memory-usage')
+        .then(r => r.json())
+        .then(memoryUsage => {
+            document.getElementById('memory-usage').textContent = memoryUsage.toFixed(1) + '%';
+            document.getElementById('memory-progress').style.width = memoryUsage + '%';
+        })
+        .catch(error => console.error('Error fetching memory usage:', error));
 
-        document.getElementById('memory-usage').textContent = data.memory_usage.toFixed(1) + '%';
-        document.getElementById('memory-progress').style.width = data.memory_usage + '%';
+    fetch('/api/system/disk-usage')
+        .then(r => r.json())
+        .then(diskUsage => {
+            document.getElementById('disk-usage').textContent = diskUsage.toFixed(1) + '%';
+            document.getElementById('disk-progress').style.width = diskUsage + '%';
+        })
+        .catch(error => console.error('Error fetching disk usage:', error));
 
-        document.getElementById('disk-usage').textContent = data.disk_usage.toFixed(1) + '%';
-        document.getElementById('disk-progress').style.width = data.disk_usage + '%';
+    fetch('/api/system/cpu-temperature')
+        .then(r => r.json())
+        .then(cpuTemp => {
+            document.getElementById('cpu-temp').textContent = cpuTemp.toFixed(1) + '°C';
+        })
+        .catch(error => console.error('Error fetching CPU temperature:', error));
 
-        document.getElementById('cpu-temp').textContent = data.cpu_temp.toFixed(1) + '°C';
+    fetch('/api/system/available-updates')
+        .then(r => r.json())
+        .then(updatesAvailable => {
+            document.getElementById('updates-available').textContent = updatesAvailable;
+        })
+        .catch(error => console.error('Error fetching available updates:', error));
 
-        document.getElementById('last-update').textContent = data.last_update;
-        document.getElementById('updates-available').textContent = data.updates_available;
-    } catch (error) {
-        console.error('Error fetching system info:', error);
-    }
+    document.getElementById('last-update').textContent = new Date().toLocaleString();
 }
 
 // Handle system update

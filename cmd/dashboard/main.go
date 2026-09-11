@@ -39,7 +39,11 @@ func main() {
 	mux.HandleFunc("/static/", h.ServeStatic())
 
 	// API endpoints
-	mux.HandleFunc("/api/system/info", h.GetSystemInfo)
+	mux.HandleFunc("/api/system/cpu-usage", h.GetCPUUsage)
+	mux.HandleFunc("/api/system/memory-usage", h.GetMemoryUsage)
+	mux.HandleFunc("/api/system/disk-usage", h.GetDiskUsage)
+	mux.HandleFunc("/api/system/cpu-temperature", h.GetCPUTemperature)
+	mux.HandleFunc("/api/system/available-updates", h.GetAvailableUpdates)
 	mux.HandleFunc("/api/system/update", h.UpdateSystem)
 	mux.HandleFunc("/api/system/restart", h.RestartSystem)
 	mux.HandleFunc("/api/system/shutdown", h.ShutdownSystem)

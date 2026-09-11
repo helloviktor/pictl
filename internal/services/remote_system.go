@@ -3,8 +3,6 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-
-	"github.com/pictl/pictl/internal/models"
 )
 
 // IpcClient is the subset of ipc.Client that RemoteSystemService depends on.
@@ -25,18 +23,54 @@ func NewRemoteSystemService(client IpcClient) *RemoteSystemService {
 	return &RemoteSystemService{client: client}
 }
 
-// SystemInfo retrieves current system information from the pictl helper process
-func (s *RemoteSystemService) SystemInfo() (models.SystemInfo, error) {
-	var info models.SystemInfo
-	if err := s.call("info", &info); err != nil {
-		return models.SystemInfo{}, err
+// CPUUsage retrieves the current CPU usage percentage from the pictl helper process
+func (s *RemoteSystemService) CPUUsage() (float64, error) {
+	var value float64
+	if err := s.call("cpu_usage", &value); err != nil {
+		return 0, err
 	}
-	return info, nil
+	return value, nil
+}
+
+// MemoryUsage retrieves the current memory usage percentage from the pictl helper process
+func (s *RemoteSystemService) MemoryUsage() (float64, error) {
+	var value float64
+	if err := s.call("memory_usage", &value); err != nil {
+		return 0, err
+	}
+	return value, nil
+}
+
+// DiskUsage retrieves the current disk usage percentage from the pictl helper process
+func (s *RemoteSystemService) DiskUsage() (float64, error) {
+	var value float64
+	if err := s.call("disk_usage", &value); err != nil {
+		return 0, err
+	}
+	return value, nil
+}
+
+// CPUTemperature retrieves the current CPU temperature in Celsius from the pictl helper process
+func (s *RemoteSystemService) CPUTemperature() (float64, error) {
+	var value float64
+	if err := s.call("cpu_temperature", &value); err != nil {
+		return 0, err
+	}
+	return value, nil
+}
+
+// AvailableUpdates retrieves the number of available package updates from the pictl helper process
+func (s *RemoteSystemService) AvailableUpdates() (int, error) {
+	var value int
+	if err := s.call("available_updates", &value); err != nil {
+		return 0, err
+	}
+	return value, nil
 }
 
 // UpdateSystem requests a system update from the pictl helper process
 func (s *RemoteSystemService) UpdateSystem() error {
-	return s.call("update", nil)
+	return s.call("apply_updates", nil)
 }
 
 // RestartSystem requests a device restart from the pictl helper process

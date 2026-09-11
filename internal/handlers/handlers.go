@@ -11,7 +11,11 @@ import (
 
 // SystemService is the subset of system operations Handlers depends on.
 type SystemService interface {
-	SystemInfo() (models.SystemInfo, error)
+	CPUUsage() (float64, error)
+	MemoryUsage() (float64, error)
+	DiskUsage() (float64, error)
+	CPUTemperature() (float64, error)
+	AvailableUpdates() (int, error)
 	UpdateSystem() error
 	RestartSystem() error
 	ShutdownSystem() error
@@ -66,21 +70,89 @@ func (h *Handlers) ServeStatic() http.HandlerFunc {
 	}
 }
 
-// GetSystemInfo returns current system information
-func (h *Handlers) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
+// GetCPUUsage returns the current CPU usage percentage
+func (h *Handlers) GetCPUUsage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	info, err := h.sysService.SystemInfo()
+	value, err := h.sysService.CPUUsage()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(info)
+	json.NewEncoder(w).Encode(value)
+}
+
+// GetMemoryUsage returns the current memory usage percentage
+func (h *Handlers) GetMemoryUsage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	value, err := h.sysService.MemoryUsage()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(value)
+}
+
+// GetDiskUsage returns the current disk usage percentage
+func (h *Handlers) GetDiskUsage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	value, err := h.sysService.DiskUsage()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(value)
+}
+
+// GetCPUTemperature returns the current CPU temperature in Celsius
+func (h *Handlers) GetCPUTemperature(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	value, err := h.sysService.CPUTemperature()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(value)
+}
+
+// GetAvailableUpdates returns the number of available package updates
+func (h *Handlers) GetAvailableUpdates(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	value, err := h.sysService.AvailableUpdates()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(value)
 }
 
 // UpdateSystem handles system update request
