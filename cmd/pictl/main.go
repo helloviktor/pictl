@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/pictl/pictl/internal/host"
@@ -160,10 +161,43 @@ func serveListener(listener net.Listener, h host.Host) error {
 
 // handleConn reads newline-terminated JSON requests from conn, executes them, and writes back JSON responses
 func handleConn(conn net.Conn, h host.Host) {
-	defer conn.Close()
+	var workers sync.WaitGroup
 
 	scanner := bufio.NewScanner(conn)
-	encoder := json.NewEncoder(conn)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	responses := make(chan ipc.Response, 32)
+	shutdown := make(chan struct{})
+	writerDone := make(chan struct{})
+
+	go func() {
+		defer close(writerDone)
+		defer close(shutdown)
+
+		encoder := json.NewEncoder(conn)
+		for {
+			select {
+			case resp, ok := <-responses:
+				if !ok {
+					return
+				}
+				if err := encoder.Encode(resp); err != nil {
+					log.Printf("encode response: %v\n", err)
+					return
+				}
+			case <-shutdown:
+				return
+			}
+		}
+	}()
+
+	sendResponse := func(resp ipc.Response) {
+		select {
+		case <-shutdown:
+			return
+		case responses <- resp:
+		}
+	}
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -173,25 +207,38 @@ func handleConn(conn net.Conn, h host.Host) {
 
 		var req ipc.Request
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			encoder.Encode(ipc.Response{Error: fmt.Sprintf("invalid request: %v", err)})
+			sendResponse(ipc.Response{Error: fmt.Sprintf("invalid request: %v", err)})
 			continue
 		}
 
-		command, ok := req.Command.(string)
-		if !ok {
-			encoder.Encode(ipc.Response{Id: req.Id, Error: "command must be a string"})
-			continue
-		}
-
-		result, err := executeCommand(command, h)
-		resp := ipc.Response{Id: req.Id, Result: result}
-		if err != nil {
-			resp.Error = err.Error()
-		}
-		encoder.Encode(resp)
+		workers.Add(1)
+		go func(req ipc.Request) {
+			defer workers.Done()
+			sendResponse(handleRequest(req, h))
+		}(req)
 	}
 
 	if err := scanner.Err(); err != nil {
 		log.Printf("read request: %v\n", err)
 	}
+
+	workers.Wait()
+	close(responses)
+	<-writerDone
+	_ = conn.Close()
+}
+
+func handleRequest(req ipc.Request, h host.Host) ipc.Response {
+	command, ok := req.Command.(string)
+	if !ok {
+		return ipc.Response{Id: req.Id, Error: "command must be a string"}
+	}
+
+	result, err := executeCommand(command, h)
+	resp := ipc.Response{Id: req.Id, Result: result}
+	if err != nil {
+		resp.Error = err.Error()
+	}
+
+	return resp
 }

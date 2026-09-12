@@ -1,10 +1,41 @@
 package main
 
 import (
+	"encoding/json"
+	"net"
 	"os"
 	"strconv"
 	"testing"
+	"time"
+
+	"github.com/pictl/pictl/internal/host"
+	"github.com/pictl/pictl/internal/ipc"
 )
+
+func TestHandleConnStopsWhenClientCloses(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		handleConn(serverConn, &host.Dummy{})
+	}()
+
+	if err := json.NewEncoder(clientConn).Encode(ipc.Request{Id: 1, Command: "cpu_usage"}); err != nil {
+		t.Fatalf("encode request: %v", err)
+	}
+
+	if err := clientConn.Close(); err != nil {
+		t.Fatalf("close client: %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handleConn did not return after client disconnect")
+	}
+}
 
 func TestIsSystemdSocketActivated(t *testing.T) {
 	// Backup env vars
