@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/pictl/pictl/internal/models"
+	"github.com/helloviktor/pictl/internal/models"
 )
 
 // SystemService is the subset of system operations Handlers depends on.

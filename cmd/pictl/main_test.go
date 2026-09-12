@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pictl/pictl/internal/host"
-	"github.com/pictl/pictl/internal/ipc"
+	"github.com/helloviktor/pictl/internal/host"
+	"github.com/helloviktor/pictl/internal/ipc"
 )
 
 func TestHandleConnStopsWhenClientCloses(t *testing.T) {

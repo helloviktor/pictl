@@ -9,10 +9,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/pictl/pictl/internal/handlers"
-	"github.com/pictl/pictl/internal/ipc"
-	"github.com/pictl/pictl/internal/services"
-	"github.com/pictl/pictl/web"
+	"github.com/helloviktor/pictl/internal/handlers"
+	"github.com/helloviktor/pictl/internal/ipc"
+	"github.com/helloviktor/pictl/internal/services"
+	"github.com/helloviktor/pictl/web"
 )
 
 func main() {

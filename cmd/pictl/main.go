@@ -15,9 +15,9 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/pictl/pictl/internal/host"
-	"github.com/pictl/pictl/internal/ipc"
-	"github.com/pictl/pictl/internal/models"
+	"github.com/helloviktor/pictl/internal/host"
+	"github.com/helloviktor/pictl/internal/ipc"
+	"github.com/helloviktor/pictl/internal/models"
 )
 
 func main() {

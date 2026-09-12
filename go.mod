@@ -1,4 +1,4 @@
-module github.com/pictl/pictl
+module github.com/helloviktor/pictl
 
 go 1.21
 
