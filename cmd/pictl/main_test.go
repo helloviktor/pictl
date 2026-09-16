@@ -22,7 +22,7 @@ func TestHandleConnStopsWhenClientCloses(t *testing.T) {
 		handleConn(serverConn, &host.Dummy{})
 	}()
 
-	if err := json.NewEncoder(clientConn).Encode(ipc.Request{Id: 1, Command: "cpu_usage"}); err != nil {
+	if err := json.NewEncoder(clientConn).Encode(ipc.Request{Id: 1, Command: ipc.CommandCPUUsage}); err != nil {
 		t.Fatalf("encode request: %v", err)
 	}
 

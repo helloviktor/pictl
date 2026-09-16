@@ -11,8 +11,8 @@ import (
 )
 
 type Request struct {
-	Id      uint64 `json:"id"`
-	Command any    `json:"command"`
+	Id      uint64  `json:"id"`
+	Command Command `json:"command"`
 }
 
 type Response struct {
@@ -74,7 +74,7 @@ func (c *Client) reader() {
 	}
 }
 
-func (c *Client) SendCommand(command any) (any, error) {
+func (c *Client) SendCommand(command Command) (any, error) {
 	id := c.nextId.Add(1)
 	response := make(chan Response)
 

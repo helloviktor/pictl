@@ -84,29 +84,29 @@ func serveSystemd(h host.Host) error {
 }
 
 // executeCommand runs command against h and returns its result
-func executeCommand(command string, h host.Host) (any, error) {
+func executeCommand(command ipc.Command, h host.Host) (any, error) {
 	switch command {
-	case "cpu_usage":
+	case ipc.CommandCPUUsage:
 		return h.CPUUsage()
-	case "memory_usage":
+	case ipc.CommandMemoryUsage:
 		return h.MemoryUsage()
-	case "disk_usage":
+	case ipc.CommandDiskUsage:
 		return h.DiskUsage()
-	case "cpu_temperature":
+	case ipc.CommandCPUTemperature:
 		return h.CPUTemperature()
-	case "available_updates":
+	case ipc.CommandAvailableUpdates:
 		return h.AvailableUpdates()
-	case "apply_updates":
+	case ipc.CommandApplyUpdates:
 		if err := h.ApplyUpdates(); err != nil {
 			return nil, err
 		}
 		return models.UpdateResponse{Success: true, Message: "System update started"}, nil
-	case "restart":
+	case ipc.CommandRestart:
 		if err := h.Restart(); err != nil {
 			return nil, err
 		}
 		return models.UpdateResponse{Success: true, Message: "System restart initiated"}, nil
-	case "shutdown":
+	case ipc.CommandShutdown:
 		if err := h.Shutdown(); err != nil {
 			return nil, err
 		}
@@ -229,12 +229,7 @@ func handleConn(conn net.Conn, h host.Host) {
 }
 
 func handleRequest(req ipc.Request, h host.Host) ipc.Response {
-	command, ok := req.Command.(string)
-	if !ok {
-		return ipc.Response{Id: req.Id, Error: "command must be a string"}
-	}
-
-	result, err := executeCommand(command, h)
+	result, err := executeCommand(req.Command, h)
 	resp := ipc.Response{Id: req.Id, Result: result}
 	if err != nil {
 		resp.Error = err.Error()

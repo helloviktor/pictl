@@ -3,11 +3,13 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/helloviktor/pictl/internal/ipc"
 )
 
 // IpcClient is the subset of ipc.Client that RemoteSystemService depends on.
 type IpcClient interface {
-	SendCommand(command any) (any, error)
+	SendCommand(command ipc.Command) (any, error)
 	Close() error
 }
 
@@ -26,7 +28,7 @@ func NewRemoteSystemService(client IpcClient) *RemoteSystemService {
 // CPUUsage retrieves the current CPU usage percentage from the pictl helper process
 func (s *RemoteSystemService) CPUUsage() (float64, error) {
 	var value float64
-	if err := s.call("cpu_usage", &value); err != nil {
+	if err := s.call(ipc.CommandCPUUsage, &value); err != nil {
 		return 0, err
 	}
 	return value, nil
@@ -35,7 +37,7 @@ func (s *RemoteSystemService) CPUUsage() (float64, error) {
 // MemoryUsage retrieves the current memory usage percentage from the pictl helper process
 func (s *RemoteSystemService) MemoryUsage() (float64, error) {
 	var value float64
-	if err := s.call("memory_usage", &value); err != nil {
+	if err := s.call(ipc.CommandMemoryUsage, &value); err != nil {
 		return 0, err
 	}
 	return value, nil
@@ -44,7 +46,7 @@ func (s *RemoteSystemService) MemoryUsage() (float64, error) {
 // DiskUsage retrieves the current disk usage percentage from the pictl helper process
 func (s *RemoteSystemService) DiskUsage() (float64, error) {
 	var value float64
-	if err := s.call("disk_usage", &value); err != nil {
+	if err := s.call(ipc.CommandDiskUsage, &value); err != nil {
 		return 0, err
 	}
 	return value, nil
@@ -53,7 +55,7 @@ func (s *RemoteSystemService) DiskUsage() (float64, error) {
 // CPUTemperature retrieves the current CPU temperature in Celsius from the pictl helper process
 func (s *RemoteSystemService) CPUTemperature() (float64, error) {
 	var value float64
-	if err := s.call("cpu_temperature", &value); err != nil {
+	if err := s.call(ipc.CommandCPUTemperature, &value); err != nil {
 		return 0, err
 	}
 	return value, nil
@@ -62,7 +64,7 @@ func (s *RemoteSystemService) CPUTemperature() (float64, error) {
 // AvailableUpdates retrieves the number of available package updates from the pictl helper process
 func (s *RemoteSystemService) AvailableUpdates() (int, error) {
 	var value int
-	if err := s.call("available_updates", &value); err != nil {
+	if err := s.call(ipc.CommandAvailableUpdates, &value); err != nil {
 		return 0, err
 	}
 	return value, nil
@@ -70,21 +72,21 @@ func (s *RemoteSystemService) AvailableUpdates() (int, error) {
 
 // UpdateSystem requests a system update from the pictl helper process
 func (s *RemoteSystemService) UpdateSystem() error {
-	return s.call("apply_updates", nil)
+	return s.call(ipc.CommandApplyUpdates, nil)
 }
 
 // RestartSystem requests a device restart from the pictl helper process
 func (s *RemoteSystemService) RestartSystem() error {
-	return s.call("restart", nil)
+	return s.call(ipc.CommandRestart, nil)
 }
 
 // ShutdownSystem requests a device shutdown from the pictl helper process
 func (s *RemoteSystemService) ShutdownSystem() error {
-	return s.call("shutdown", nil)
+	return s.call(ipc.CommandShutdown, nil)
 }
 
 // call sends command to the pictl helper process and, if out is non-nil, decodes the result into it
-func (s *RemoteSystemService) call(command string, out any) error {
+func (s *RemoteSystemService) call(command ipc.Command, out any) error {
 	result, err := s.client.SendCommand(command)
 	if err != nil {
 		return err

@@ -103,17 +103,17 @@ func TestSendCommandConcurrent(t *testing.T) {
 	wg.Add(numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
-		go func(val float64) {
+		go func(val Command) {
 			defer wg.Done()
 			res, err := client.SendCommand(val)
 			if err != nil {
 				t.Errorf("SendCommand returned an error: %v", err)
 				return
 			}
-			if res != val {
+			if res != string(val) {
 				t.Errorf("expected response %v, got %v", val, res)
 			}
-		}(float64(i))
+		}(Command(fmt.Sprintf("cmd-%d", i)))
 	}
 
 	wg.Wait()
