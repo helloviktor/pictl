@@ -1,0 +1,17 @@
+[Unit]
+Description=pictl Dashboard Web Interface
+Requires=pictl.socket
+After=network.target pictl.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/dashboard --addr :8080 --socket /run/pictl.sock
+User=pictl
+Group=pictl
+SupplementaryGroups=pictl
+WorkingDirectory=/usr/local/bin
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
