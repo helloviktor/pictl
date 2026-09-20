@@ -230,7 +230,7 @@ func handleConn(conn net.Conn, h host.Host) {
 
 func handleRequest(req ipc.Request, h host.Host) ipc.Response {
 	result, err := executeCommand(req.Command, h)
-	resp := ipc.Response{Id: req.Id, Result: result}
+	resp := ipc.Response{ID: req.ID, Result: result}
 	if err != nil {
 		resp.Error = err.Error()
 	}

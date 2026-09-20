@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -9,7 +10,7 @@ import (
 
 // IpcClient is the subset of ipc.Client that RemoteSystemService depends on.
 type IpcClient interface {
-	SendCommand(command ipc.Command) (any, error)
+	SendCommand(ctx context.Context, command ipc.Command) (any, error)
 	Close() error
 }
 
@@ -87,7 +88,7 @@ func (s *RemoteSystemService) ShutdownSystem() error {
 
 // call sends command to the pictl helper process and, if out is non-nil, decodes the result into it
 func (s *RemoteSystemService) call(command ipc.Command, out any) error {
-	result, err := s.client.SendCommand(command)
+	result, err := s.client.SendCommand(context.Background(), command)
 	if err != nil {
 		return err
 	}

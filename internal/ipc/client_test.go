@@ -2,7 +2,9 @@ package ipc
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -62,7 +64,7 @@ func TestNewClientError(t *testing.T) {
 func TestSendCommand(t *testing.T) {
 	socketPath, cleanup := startMockServer(t, func(req Request) Response {
 		return Response{
-			Id:     req.Id,
+			ID:     req.ID,
 			Result: fmt.Sprintf("echo:%v", req.Command),
 		}
 	})
@@ -74,7 +76,7 @@ func TestSendCommand(t *testing.T) {
 	}
 	defer client.Close()
 
-	result, err := client.SendCommand("ping")
+	result, err := client.SendCommand(context.Background(), "ping")
 	if err != nil {
 		t.Fatalf("SendCommand returned an error: %v", err)
 	}
@@ -83,10 +85,47 @@ func TestSendCommand(t *testing.T) {
 	}
 }
 
+func TestSendCommandContextCancellation(t *testing.T) {
+	requestReceived := make(chan struct{})
+	releaseResponse := make(chan struct{})
+	socketPath, cleanup := startMockServer(t, func(req Request) Response {
+		close(requestReceived)
+		<-releaseResponse
+		return Response{ID: req.ID}
+	})
+
+	client, err := NewClient(socketPath)
+	if err != nil {
+		cleanup()
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resultCh := make(chan error, 1)
+	go func() {
+		_, err := client.SendCommand(ctx, "wait")
+		resultCh <- err
+	}()
+
+	<-requestReceived
+	cancel()
+	if err := <-resultCh; !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation, got %v", err)
+	}
+
+	close(releaseResponse)
+	if err := client.Close(); err != nil {
+		t.Fatalf("failed to close client: %v", err)
+	}
+	cleanup()
+}
+
 func TestSendCommandConcurrent(t *testing.T) {
 	socketPath, cleanup := startMockServer(t, func(req Request) Response {
 		return Response{
-			Id:     req.Id,
+			ID:     req.ID,
 			Result: req.Command,
 		}
 	})
@@ -105,7 +144,7 @@ func TestSendCommandConcurrent(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func(val Command) {
 			defer wg.Done()
-			res, err := client.SendCommand(val)
+			res, err := client.SendCommand(context.Background(), val)
 			if err != nil {
 				t.Errorf("SendCommand returned an error: %v", err)
 				return
